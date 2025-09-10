@@ -1,18 +1,64 @@
-extern crate gl;
+use iced::{Application, Command, Element, Settings, executor, widget::{button, column, text}};
+use rodio::{Decoder, OutputStream, Sink};
+use std::{fs::File, io::BufReader, sync::Arc};
 
-mod window;
+#[derive(Debug, Clone)]
+enum Message {
+    PlayPressed,
+}
 
-fn main() {
-    let mut window = window::Window::new(800, 600, "olive - music player");
-    gl::load_with(|s| window.get_proc_address(s));
+struct Olive {
+    audio_sink: Option<Arc<Sink>>,
+}
 
-    while !window.should_close() {
-        unsafe {
-            gl::ClearColor(0.2, 0.2, 0.2, 1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT);
+impl Application for Olive {
+    type Executor = executor::Default;
+    type Message = Message;
+    type Theme = iced::Theme;
+    type Flags = ();
+
+    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+        (
+            Self { audio_sink: None },
+            Command::none(),
+        )
+    }
+
+    fn title(&self) -> String {
+        String::from("olive - a music player")
+    }
+
+    fn update(&mut self, message: Message) -> Command<Message> {
+        match message {
+            Message::PlayPressed => {
+                if self.audio_sink.is_none() {
+                    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+                    let sink = Sink::try_new(&stream_handle).unwrap();
+
+                    let file = BufReader::new(File::open("sample.mp3").unwrap());
+                    let source = Decoder::new(file).unwrap();
+                    sink.append(source);
+
+                    self.audio_sink = Some(Arc::new(sink));
+                }
+            }
         }
 
-        window.swap_buffers();
-        window.poll_events();
+        Command::none()
     }
+
+    fn view(&self) -> Element<'_, Message> {
+        let content = column![
+            text("olive - a music player"),
+            button("Play music").on_press(Message::PlayPressed),
+        ]
+        .spacing(20)
+        .padding(40);
+
+        content.into()
+    }
+}
+
+fn main() -> iced::Result {
+    Olive::run(Settings::default())
 }
